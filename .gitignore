@@ -16,7 +16,6 @@ htmlcov/
 
 stubs/
 .stubs/
-redstonex/_core.pyi
 
 build/
 CMakefiles/

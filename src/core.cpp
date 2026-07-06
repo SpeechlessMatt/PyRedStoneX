@@ -28,6 +28,8 @@ extern "C" {
 #include "redstonex_types.h"
 }
 
+#include <plugin.h>
+
 namespace py = pybind11;
 
 class ConnectiveObject {
@@ -43,8 +45,6 @@ class ConnectiveObject {
 
         void connect(const ConnectiveObject& target) { rsx_connect_objects(obj, target.get_raw()); }
         void disconnect(const ConnectiveObject& target) { rsx_disconnect_objects(obj, target.get_raw()); }
-
-        uint8_t get_power() const { return obj ? obj->power : 0; }
 };
 
 class LineObject : public ConnectiveObject {
@@ -171,11 +171,6 @@ class Simulator {
         void remove_tick_breakpoint(uint32_t tick) { rsx_simulator_remove_tick_breakpoint(sim, tick); };
 };
 
-typedef struct ComponentOps {
-    RSXConnectiveObject* (*create)(void* args);
-    void (*destroy)(RSXConnectiveObject* self);
-} ComponentOps;
-
 std::unordered_map<std::string, ComponentOps> g_plugin_registry; 
 
 /*
@@ -195,8 +190,44 @@ class CustomObject : public ConnectiveObject {
             }
             ops = it->second;
 
+            // TODO:希望以后的我再来看一眼
+            // 这部分的动态args由Gemini生成，不会写而且也没精力了...
+            // 以后还是得看一眼的，AI生成的代码容易抽风...
             if (ops.create) {
-                obj = ops.create(&kwargs); 
+                PluginArgs args_tool;
+                args_tool.py_kwargs_ptr = &kwargs;
+
+                args_tool.get_int = [](PluginArgs* self, const char* key, int64_t default_val) -> int64_t {
+                    auto* dict = reinterpret_cast<py::kwargs*>(self->py_kwargs_ptr);
+                    if (dict && dict->contains(key)) return (*dict)[key].cast<int64_t>();
+                    return default_val;
+                };
+
+                args_tool.get_double = [](PluginArgs* self, const char* key, double default_val) -> double {
+                    auto* dict = reinterpret_cast<py::kwargs*>(self->py_kwargs_ptr);
+                    if (dict && dict->contains(key)) return (*dict)[key].cast<double>();
+                    return default_val;
+                };
+
+                args_tool.get_bool = [](PluginArgs* self, const char* key, int default_val) -> int {
+                    auto* dict = reinterpret_cast<py::kwargs*>(self->py_kwargs_ptr);
+                    if (dict && dict->contains(key)) return (*dict)[key].cast<bool>() ? 1 : 0;
+                    return default_val;
+                };
+
+                // 🚀 安全的 get_string 实现，无局部临时变量生命周期问题
+                args_tool.get_string = [](PluginArgs* self, const char* key, const char* default_val) -> const char* {
+                    auto* dict = reinterpret_cast<py::kwargs*>(self->py_kwargs_ptr);
+                    if (dict && dict->contains(key)) {
+                        PyObject* obj_ptr = (*dict)[key].ptr();
+                        if (PyUnicode_Check(obj_ptr)) {
+                            return PyUnicode_AsUTF8(obj_ptr); 
+                        }
+                    }
+                    return default_val;
+                };
+                                
+                obj = reinterpret_cast<RSXConnectiveObject*>(ops.create(&args_tool));
             }
 
             if (!obj) {
@@ -212,12 +243,30 @@ class CustomObject : public ConnectiveObject {
                 obj = nullptr;
             }
         }
+
+        // 来自Gemini 这个动态属性我不会写 而且脑力已经耗尽了 肝了一整天了 交给ai了
+        py::object get_dynamic_property(const std::string& name) const {
+            if (!obj) throw py::attribute_error("Object is null");
+
+            if (ops.get_property) {
+                PropertyValue res = ops.get_property(obj, name.c_str());
+                switch (res.type) {
+                    case TYPE_INT:    return py::cast(res.value.v_int);
+                    case TYPE_DOUBLE: return py::cast(res.value.v_double);
+                    case TYPE_BOOL:   return py::cast(res.value.v_bool != 0);
+                    case TYPE_STRING: return py::cast(res.value.v_string);
+                    default: break; 
+                }
+            }
+            throw py::attribute_error("Attribute '" + name + "' not found.");
+        }
 };
 
-void register_plugin_from_ptr(const std::string& name, size_t create_ptr, size_t destroy_ptr) {
+void register_plugin_from_ptr(const std::string& name, size_t create_ptr, size_t destroy_ptr, size_t get_prop_ptr) {
     ComponentOps ops;
-    ops.create  = reinterpret_cast<RSXConnectiveObject* (*)(void*)>(create_ptr);
-    ops.destroy = reinterpret_cast<void (*)(RSXConnectiveObject*)>(destroy_ptr);
+    ops.create  = reinterpret_cast<void* (*)(PluginArgs*)>(create_ptr);
+    ops.destroy = reinterpret_cast<void (*)(void*)>(destroy_ptr);
+    ops.get_property = reinterpret_cast<PropertyValue (*)(void*, const char*)>(get_prop_ptr);
 
     g_plugin_registry[name] = ops;
 }
@@ -234,31 +283,63 @@ PYBIND11_MODULE(_core, m) {
     py::class_<ConnectiveObject>(m, "CoreConnectiveObject")
         .def("connect", &ConnectiveObject::connect)
         .def("disconnect", &ConnectiveObject::disconnect)
-        .def_property_readonly("power", &ConnectiveObject::get_power);
+        .def_property_readonly("id", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->id : 0; })
+        .def_property_readonly("uri", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->uri : ""; })
+        .def_property_readonly("power", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->power : 0; })
+        .def_property_readonly("is_lossless", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->is_lossless : false; })
+        .def_property_readonly("is_weak_transmissible", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->is_weak_transmissible : false; });
 
     py::class_<LineObject, ConnectiveObject>(m, "CoreLineObject")
         .def(py::init<uint32_t, uint32_t>());
 
     py::class_<SourceObject, ConnectiveObject>(m, "CoreSourceObject")
-        .def(py::init<uint32_t, uint32_t, uint8_t>());
+        .def(py::init<uint32_t, uint32_t, uint8_t>())
+        .def_property_readonly("max_delay", [](const SourceObject &self) {
+            auto* src = reinterpret_cast<RSXSourceObject*>(self.get_raw());
+            return src ? src->max_delay : 0;
+        });
 
     py::class_<SlotObject, ConnectiveObject>(m, "CoreSlotObject")
         .def(py::init<uint32_t, const ConnectiveObject&, RSXPowerType>());
 
     py::class_<RelaySource, SourceObject>(m, "CoreRelaySource")
-        .def(py::init<uint32_t, uint8_t, uint32_t>());
+        .def(py::init<uint32_t, uint8_t, uint32_t>())
+        .def_property_readonly("delay", [](const RelaySource &self) {
+            return reinterpret_cast<RSXRelaySource*>(self.get_raw())->delay;
+        })
+        .def_property_readonly("relay_power", [](const RelaySource &self) {
+            return reinterpret_cast<RSXRelaySource*>(self.get_raw())->relay_power;
+        });
+
+    py::enum_<RSXComparatorSourceMode>(m, "CoreComparatorMode")
+        .value("COMPARISON", RSXComparatorSourceMode::COMPARISON_MODE)
+        .value("SUBTRACTION", RSXComparatorSourceMode::SUBTRACTION_MODE)
+        .export_values();
 
     py::class_<ComparatorSource, SourceObject>(m, "CoreComparatorSource")
-        .def(py::init<uint32_t, uint32_t>());
+        .def(py::init<uint32_t, uint32_t>())
+        .def_property_readonly("delay", [](const ComparatorSource &self) {
+            return reinterpret_cast<RSXComparatorSource*>(self.get_raw())->delay;
+        })
+        .def_property_readonly("mode", [](const ComparatorSource &self) {
+            return reinterpret_cast<RSXComparatorSource*>(self.get_raw())->mode;
+        });
 
     py::class_<TorchSource, SourceObject>(m, "CoreTorchSource")
-        .def(py::init<uint32_t, uint8_t, uint32_t>());
+        .def(py::init<uint32_t, uint8_t, uint32_t>())
+        .def_property_readonly("delay", [](const TorchSource &self) {
+            return reinterpret_cast<RSXTorchSource*>(self.get_raw())->delay;
+        })
+        .def_property_readonly("torch_power", [](const TorchSource &self) {
+            return reinterpret_cast<RSXTorchSource*>(self.get_raw())->torch_power;
+        });
 
     py::class_<Block, LineObject>(m, "CoreBlock")
         .def(py::init<uint32_t, uint32_t>());
 
     py::class_<CustomObject, ConnectiveObject>(m, "CoreCustomObject")
-        .def(py::init<const std::string&, py::kwargs>());
+        .def(py::init<const std::string&, py::kwargs>())
+        .def("__getattr__", &CustomObject::get_dynamic_property);
 
     py::class_<Simulator>(m, "CoreSimulator")
         .def(py::init<>())

@@ -33,10 +33,14 @@ add_library(redstonex STATIC ${REDSTONEX_SRCS})
 target_include_directories(redstonex PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/extern/RedStoneX/include)
 set_target_properties(redstonex PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-pybind11_add_module(_core core.cpp)
+pybind11_add_module(_core src/core.cpp)
 pybind11_strip(_core)
 
-target_include_directories(_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/extern/RedStoneX/include)
+target_include_directories(_core PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/extern/RedStoneX/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
 target_link_libraries(_core PRIVATE redstonex)
 
 set_target_properties(_core PROPERTIES 

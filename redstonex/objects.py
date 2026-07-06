@@ -58,3 +58,10 @@ class Block(_core.CoreBlock):
     def __init__(self, limit: int = 6) -> None:
         auto_id = _get_next_id()
         super().__init__(auto_id, limit)
+
+class Custom(_core.CoreCustomObject):
+    def __init__(self, plugin_name: str, **kwargs) -> None:
+        auto_id = _get_next_id()
+        kwargs["id"] = auto_id
+        
+        super().__init__(plugin_name, **kwargs)

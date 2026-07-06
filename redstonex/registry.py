@@ -36,19 +36,24 @@ class PluginRegistry:
         f"{exc_type} {exc_val} {exc_tb}"
         return False
 
-    def add(self, component_name: str, create: str, destroy: str):
+    def add(self, component_name: str, create: str, destroy: str, get_property: str = None):
         try:
             create_func = getattr(self.plugin_lib, create)
             destroy_func = getattr(self.plugin_lib, destroy)
             
             create_ptr = ctypes.cast(create_func, ctypes.c_void_p).value
             destroy_ptr = ctypes.cast(destroy_func, ctypes.c_void_p).value
+
+            get_prop_ptr = 0
+            if get_property:
+                get_prop_func = getattr(self.plugin_lib, get_property)
+                get_prop_ptr = ctypes.cast(get_prop_func, ctypes.c_void_p).value or 0
             
         except AttributeError:
             lib_name = os.path.basename(self.abs_path)
             raise AttributeError(f"在动态库 {lib_name} 中未找到指定的 C 函数对: {create} 或 {destroy}！如果是cpp开发的话，记得写extern 'C'哦")
 
-        _core.register_plugin_from_ptr(component_name, create_ptr, destroy_ptr)
+        _core.register_plugin_from_ptr(component_name, create_ptr, destroy_ptr, get_prop_ptr)
 
         return self
 

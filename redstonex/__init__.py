@@ -13,9 +13,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import os
+import sys
+if sys.platform != "win32":
+    sys.setdlopenflags(os.RTLD_NOW | os.RTLD_GLOBAL)
+
 from .registry import PluginRegistry
 from .simulator import Simulator
-from .objects import Line, Source, Slot, RelaySource, ComparatorSource, TorchSource, Block
+from .objects import Line, Source, Slot, RelaySource, ComparatorSource, TorchSource, Block, Custom
 from .types import PowerType
 
 __all__ = [
@@ -28,5 +33,6 @@ __all__ = [
     "ComparatorSource",
     "TorchSource",
     "Block",
+    "Custom",
     "PowerType"
 ]
