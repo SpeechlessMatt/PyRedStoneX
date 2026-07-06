@@ -1,0 +1,3 @@
+[submodule "extern/RedStoneX"]
+	path = extern/RedStoneX
+	url = https://github.com/SpeechlessMatt/RedStoneX.git
