@@ -17,6 +17,7 @@ cmake_minimum_required(VERSION 3.12)
 project(PyRedStoneX)
 
 set(PYBIND11_FINDPYTHON ON)
+find_package(Python REQUIRED COMPONENTS Interpreter Development)
 find_package(pybind11 REQUIRED)
 
 if(NOT CMAKE_BUILD_TYPE)

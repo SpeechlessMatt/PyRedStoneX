@@ -2,6 +2,7 @@
 import os
 import subprocess
 import sys
+import pybind11
 from setuptools import Extension, setup, find_packages
 from setuptools.command.build_ext import build_ext
 
@@ -18,7 +19,8 @@ class CMakeBuild(build_ext):
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}",
             f"-DPYTHON_EXECUTABLE={sys.executable}",
-            "-DCMAKE_BUILD_TYPE=Release"
+            "-DCMAKE_BUILD_TYPE=Release",
+            f"-Dpybind11_DIR={pybind11.get_cmake_dir()}",
         ]
 
         if not os.path.exists(self.build_temp):
