@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <cassert>
 #include <cstdint>
 #include <pybind11/detail/common.h>
 #include <pybind11/pybind11.h>
@@ -30,21 +31,40 @@ extern "C" {
 
 #include <plugin.h>
 
+#define ANSI_RESET   "\033[0m"
+#define ANSI_DEBUG   "\033[36m"  // 青色
+#define ANSI_INFO    "\033[32m"  // 绿色
+#define ANSI_WARN    "\033[33m"  // 黄色
+#define ANSI_ERROR   "\033[31m"  // 红色
+
 namespace py = pybind11;
 
 class ConnectiveObject {
     protected:
         RSXConnectiveObject* obj;
+        bool owned_by_cpp = true;
 
     public:
         ConnectiveObject(RSXConnectiveObject* raw_obj) : obj(raw_obj) {}
         ConnectiveObject(uint32_t id, RSXObjectRole role, uint32_t limit, bool is_lossless, bool is_weak_transmissible) { obj = rsx_create_object(id, role, limit, is_lossless, is_weak_transmissible); }
-        virtual ~ConnectiveObject() { if (obj) rsx_destroy_object(obj); }
+
+        static ConnectiveObject create_view(uintptr_t raw_ptr) {
+            ConnectiveObject view(nullptr);
+            view.obj = reinterpret_cast<RSXConnectiveObject*>(raw_ptr);
+            view.owned_by_cpp = false; // 不拥有内存
+            return view;
+        }
+        
+        virtual ~ConnectiveObject() { 
+            if (obj && owned_by_cpp) {
+                rsx_destroy_object(obj); 
+            }
+        }
 
         RSXConnectiveObject* get_raw() const { return obj; }
 
-        void connect(const ConnectiveObject& target) { rsx_connect_objects(obj, target.get_raw()); }
-        void disconnect(const ConnectiveObject& target) { rsx_disconnect_objects(obj, target.get_raw()); }
+        bool connect(const ConnectiveObject& target) { return rsx_connect_objects(obj, target.get_raw()); }
+        bool disconnect(const ConnectiveObject& target) { return rsx_disconnect_objects(obj, target.get_raw()); }
 };
 
 class LineObject : public ConnectiveObject {
@@ -84,7 +104,7 @@ class SlotObject : public ConnectiveObject {
         RSXSlotObject* slot;
 
     public:
-        SlotObject(RSXSlotObject* raw_slot) : ConnectiveObject(reinterpret_cast<RSXConnectiveObject*>(raw_slot)), slot(raw_slot) {}
+        SlotObject(RSXSlotObject* raw_slot, bool owner = false) : ConnectiveObject(reinterpret_cast<RSXConnectiveObject*>(raw_slot)), slot(raw_slot) {}
         SlotObject(uint32_t id, const ConnectiveObject& parent, RSXPowerType source_power_type) : ConnectiveObject(nullptr) { 
             slot = rsx_create_slot_object(id, parent.get_raw(), source_power_type); 
             obj = reinterpret_cast<RSXConnectiveObject*>(slot);
@@ -155,21 +175,56 @@ class Block : public LineObject {
         }
 };
 
+extern "C" void c_log_callback_bridge(RSXLogLevel level, const char* msg, void* user_data);
+
 class Simulator {
     private:
         RSXSimulator* sim;
+        RSXLogLevel m_max_log_level = RSX_LOG_INFO;
 
     public:
         Simulator() { sim = rsx_create_simulator(); }
         ~Simulator() { rsx_destroy_simulator(sim); }
         void run() { rsx_simulator_run(sim); }
-        void step() { rsx_simulator_step(sim); }
+        bool step() { return rsx_simulator_step(sim); }
         void pause() { rsx_simulator_pause(sim); }
         void resume() { rsx_simulator_resume(sim); }
+
+        RSXLogLevel get_max_log_level() const { return m_max_log_level; }
+        void enable_logging(RSXLogLevel level = RSX_LOG_INFO) {
+            if (!sim) return;
+            m_max_log_level = level;
+            rsx_simulator_set_log_callback(sim, c_log_callback_bridge, this);
+        }
+
         void bind_object(const ConnectiveObject& obj){ rsx_simulator_bind_object(sim, obj.get_raw()); }
         void add_tick_breakpoint(uint32_t tick) { rsx_simulator_add_tick_breakpoint(sim, tick); }
         void remove_tick_breakpoint(uint32_t tick) { rsx_simulator_remove_tick_breakpoint(sim, tick); };
 };
+
+extern "C" void c_log_callback_bridge(RSXLogLevel level, const char* msg, void* user_data) {
+    if (!user_data) return;
+
+    auto* self = static_cast<Simulator*>(user_data);
+
+    if (level < self->get_max_log_level()) {
+        return;
+    }
+
+    std::string color_prefix = "";
+    switch (level) {
+        case RSX_LOG_DEBUG: color_prefix = ANSI_DEBUG; break;
+        case RSX_LOG_INFO:  color_prefix = ANSI_INFO;  break;
+        case RSX_LOG_WARN:  color_prefix = ANSI_WARN;  break;
+        case RSX_LOG_ERROR: color_prefix = ANSI_ERROR; break;
+        default:            color_prefix = ANSI_RESET; break;
+    }
+
+    std::string formatted_msg = color_prefix + "[PyRedStoneX Log] " + msg + ANSI_RESET;
+
+    py::gil_scoped_acquire acquire;
+    py::print(formatted_msg, py::arg("flush") = true);
+}
 
 std::unordered_map<std::string, ComponentOps> g_plugin_registry; 
 
@@ -190,9 +245,8 @@ class CustomObject : public ConnectiveObject {
             }
             ops = it->second;
 
-            // TODO:希望以后的我再来看一眼
-            // 这部分的动态args由Gemini生成，不会写而且也没精力了...
-            // 以后还是得看一眼的，AI生成的代码容易抽风...
+            // 这部分的动态args由Gemini生成，目前来看基本没有问题
+            // 为了兼容C语言开发的插件，毕竟引擎本身就是纯C
             if (ops.create) {
                 PluginArgs args_tool;
                 args_tool.py_kwargs_ptr = &kwargs;
@@ -215,7 +269,6 @@ class CustomObject : public ConnectiveObject {
                     return default_val;
                 };
 
-                // 🚀 安全的 get_string 实现，无局部临时变量生命周期问题
                 args_tool.get_string = [](PluginArgs* self, const char* key, const char* default_val) -> const char* {
                     auto* dict = reinterpret_cast<py::kwargs*>(self->py_kwargs_ptr);
                     if (dict && dict->contains(key)) {
@@ -244,7 +297,7 @@ class CustomObject : public ConnectiveObject {
             }
         }
 
-        // 来自Gemini 这个动态属性我不会写 而且脑力已经耗尽了 肝了一整天了 交给ai了
+        // 来自Gemini C++胶水层代码有很多是由Gemini辅助完成的
         py::object get_dynamic_property(const std::string& name) const {
             if (!obj) throw py::attribute_error("Object is null");
 
@@ -255,6 +308,14 @@ class CustomObject : public ConnectiveObject {
                     case TYPE_DOUBLE: return py::cast(res.value.v_double);
                     case TYPE_BOOL:   return py::cast(res.value.v_bool != 0);
                     case TYPE_STRING: return py::cast(res.value.v_string);
+                    case TYPE_SLOT_PTR: {
+                        if (!res.value.v_ptr) return py::none();
+                
+                        auto* raw_slot = reinterpret_cast<RSXSlotObject*>(res.value.v_ptr);
+                        SlotObject wrapped_slot(raw_slot, false);
+                        
+                        return py::cast(wrapped_slot, py::return_value_policy::reference_internal);
+                    }
                     default: break; 
                 }
             }
@@ -281,11 +342,14 @@ PYBIND11_MODULE(_core, m) {
         .export_values();
 
     py::class_<ConnectiveObject>(m, "CoreConnectiveObject")
+        .def_static("create_view", &ConnectiveObject::create_view)
         .def("connect", &ConnectiveObject::connect)
         .def("disconnect", &ConnectiveObject::disconnect)
         .def_property_readonly("id", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->id : 0; })
         .def_property_readonly("uri", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->uri : ""; })
         .def_property_readonly("power", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->power : 0; })
+        .def_property_readonly("limit", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->limit : 0; })
+        .def_property_readonly("connect_count", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->connect_count : 0; })
         .def_property_readonly("is_lossless", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->is_lossless : false; })
         .def_property_readonly("is_weak_transmissible", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->is_weak_transmissible : false; });
 
@@ -309,7 +373,17 @@ PYBIND11_MODULE(_core, m) {
         })
         .def_property_readonly("relay_power", [](const RelaySource &self) {
             return reinterpret_cast<RSXRelaySource*>(self.get_raw())->relay_power;
-        });
+        })
+
+        .def_property_readonly("_input_slot_ptr", [](const RelaySource &self) {
+            auto* raw = reinterpret_cast<RSXRelaySource*>(self.get_raw());
+            return reinterpret_cast<uintptr_t>(&raw->input_slot);
+        }, py::return_value_policy::reference_internal)
+
+        .def_property_readonly("_output_slot_ptr", [](const RelaySource &self) {
+            auto* raw = reinterpret_cast<RSXRelaySource*>(self.get_raw());
+            return reinterpret_cast<uintptr_t>(&raw->output_slot);
+        }, py::return_value_policy::reference_internal);
 
     py::enum_<RSXComparatorSourceMode>(m, "CoreComparatorMode")
         .value("COMPARISON", RSXComparatorSourceMode::COMPARISON_MODE)
@@ -323,7 +397,27 @@ PYBIND11_MODULE(_core, m) {
         })
         .def_property_readonly("mode", [](const ComparatorSource &self) {
             return reinterpret_cast<RSXComparatorSource*>(self.get_raw())->mode;
-        });
+        })
+
+        .def_property_readonly("_input_slot_ptr", [](const ComparatorSource &self) {
+            auto* raw = reinterpret_cast<RSXComparatorSource*>(self.get_raw());
+            return reinterpret_cast<uintptr_t>(&raw->input_slot);
+        }, py::return_value_policy::reference_internal)
+
+        .def_property_readonly("_calculate_slot_a_ptr", [](const ComparatorSource &self) {
+            auto* raw = reinterpret_cast<RSXComparatorSource*>(self.get_raw());
+            return reinterpret_cast<uintptr_t>(&raw->calculate_slot_a);
+        }, py::return_value_policy::reference_internal)
+
+        .def_property_readonly("_calculate_slot_b_ptr", [](const ComparatorSource &self) {
+            auto* raw = reinterpret_cast<RSXComparatorSource*>(self.get_raw());
+            return reinterpret_cast<uintptr_t>(&raw->calculate_slot_b);
+        }, py::return_value_policy::reference_internal)
+
+        .def_property_readonly("_output_slot_ptr", [](const ComparatorSource &self) {
+            auto* raw = reinterpret_cast<RSXComparatorSource*>(self.get_raw());
+            return reinterpret_cast<uintptr_t>(&raw->output_slot);
+        }, py::return_value_policy::reference_internal);
 
     py::class_<TorchSource, SourceObject>(m, "CoreTorchSource")
         .def(py::init<uint32_t, uint8_t, uint32_t>())
@@ -332,7 +426,17 @@ PYBIND11_MODULE(_core, m) {
         })
         .def_property_readonly("torch_power", [](const TorchSource &self) {
             return reinterpret_cast<RSXTorchSource*>(self.get_raw())->torch_power;
-        });
+        })
+
+        .def_property_readonly("_bottom_slot_ptr", [](const TorchSource &self) {
+            auto* raw = reinterpret_cast<RSXTorchSource*>(self.get_raw());
+            return reinterpret_cast<uintptr_t>(&raw->bottom_slot);
+        }, py::return_value_policy::reference_internal)
+
+        .def_property_readonly("_power_slot_ptr", [](const TorchSource &self) {
+            auto* raw = reinterpret_cast<RSXTorchSource*>(self.get_raw());
+            return reinterpret_cast<uintptr_t>(&raw->power_slot);
+        }, py::return_value_policy::reference_internal);
 
     py::class_<Block, LineObject>(m, "CoreBlock")
         .def(py::init<uint32_t, uint32_t>());
@@ -341,6 +445,13 @@ PYBIND11_MODULE(_core, m) {
         .def(py::init<const std::string&, py::kwargs>())
         .def("__getattr__", &CustomObject::get_dynamic_property);
 
+    py::enum_<RSXLogLevel>(m, "CoreLogLevel")
+        .value("DEBUG", RSX_LOG_DEBUG)
+        .value("INFO", RSX_LOG_INFO)
+        .value("WARN", RSX_LOG_WARN)
+        .value("ERROR", RSX_LOG_ERROR)
+        .export_values();
+
     py::class_<Simulator>(m, "CoreSimulator")
         .def(py::init<>())
         .def("bind_object", &Simulator::bind_object)
@@ -348,6 +459,7 @@ PYBIND11_MODULE(_core, m) {
         .def("pause", &Simulator::pause)
         .def("resume", &Simulator::resume)
         .def("step", &Simulator::step)
+        .def("enable_logging", &Simulator::enable_logging)
         .def("add_tick_breakpoint", &Simulator::add_tick_breakpoint)
         .def("remove_tick_breakpoint", &Simulator::remove_tick_breakpoint);
 

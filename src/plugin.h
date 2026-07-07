@@ -25,7 +25,8 @@ typedef enum {
     TYPE_INT,
     TYPE_DOUBLE,
     TYPE_BOOL,
-    TYPE_STRING
+    TYPE_STRING,
+    TYPE_SLOT_PTR
 } PropertyType;
 
 // 来自Gemini 我已累哭
@@ -37,6 +38,7 @@ typedef struct PropertyValue {
         double      v_double;
         int         v_bool;
         const char* v_string;
+        void* v_ptr;
     } value;
 } PropertyValue;
 

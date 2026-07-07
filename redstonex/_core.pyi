@@ -3,7 +3,7 @@ RedStoneX 引擎核心
 """
 from __future__ import annotations
 import typing
-__all__: list[str] = ['COMPARISON', 'CoreBlock', 'CoreComparatorMode', 'CoreComparatorSource', 'CoreConnectiveObject', 'CoreCustomObject', 'CoreLineObject', 'CorePowerType', 'CoreRelaySource', 'CoreSimulator', 'CoreSlotObject', 'CoreSourceObject', 'CoreTorchSource', 'NONE', 'STRONG', 'SUBTRACTION', 'WEAK', 'register_plugin_from_ptr']
+__all__: list[str] = ['COMPARISON', 'CoreBlock', 'CoreComparatorMode', 'CoreComparatorSource', 'CoreConnectiveObject', 'CoreCustomObject', 'CoreLineObject', 'CoreLogLevel', 'CorePowerType', 'CoreRelaySource', 'CoreSimulator', 'CoreSlotObject', 'CoreSourceObject', 'CoreTorchSource', 'DEBUG', 'ERROR', 'INFO', 'NONE', 'STRONG', 'SUBTRACTION', 'WARN', 'WEAK', 'register_plugin_from_ptr']
 class CoreBlock(CoreLineObject):
     def __init__(self, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: typing.SupportsInt | typing.SupportsIndex) -> None:
         ...
@@ -48,15 +48,33 @@ class CoreComparatorSource(CoreSourceObject):
     def __init__(self, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: typing.SupportsInt | typing.SupportsIndex) -> None:
         ...
     @property
+    def _calculate_slot_a_ptr(self) -> int:
+        ...
+    @property
+    def _calculate_slot_b_ptr(self) -> int:
+        ...
+    @property
+    def _input_slot_ptr(self) -> int:
+        ...
+    @property
+    def _output_slot_ptr(self) -> int:
+        ...
+    @property
     def delay(self) -> int:
         ...
     @property
     def mode(self) -> CoreComparatorMode:
         ...
 class CoreConnectiveObject:
-    def connect(self, arg0: CoreConnectiveObject) -> None:
+    @staticmethod
+    def create_view(arg0: typing.SupportsInt | typing.SupportsIndex) -> CoreConnectiveObject:
         ...
-    def disconnect(self, arg0: CoreConnectiveObject) -> None:
+    def connect(self, arg0: CoreConnectiveObject) -> bool:
+        ...
+    def disconnect(self, arg0: CoreConnectiveObject) -> bool:
+        ...
+    @property
+    def connect_count(self) -> int:
         ...
     @property
     def id(self) -> int:
@@ -66,6 +84,9 @@ class CoreConnectiveObject:
         ...
     @property
     def is_weak_transmissible(self) -> bool:
+        ...
+    @property
+    def limit(self) -> int:
         ...
     @property
     def power(self) -> int:
@@ -80,6 +101,49 @@ class CoreCustomObject(CoreConnectiveObject):
         ...
 class CoreLineObject(CoreConnectiveObject):
     def __init__(self, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: typing.SupportsInt | typing.SupportsIndex) -> None:
+        ...
+class CoreLogLevel:
+    """
+    Members:
+    
+      DEBUG
+    
+      INFO
+    
+      WARN
+    
+      ERROR
+    """
+    DEBUG: typing.ClassVar[CoreLogLevel]  # value = <CoreLogLevel.DEBUG: 0>
+    ERROR: typing.ClassVar[CoreLogLevel]  # value = <CoreLogLevel.ERROR: 3>
+    INFO: typing.ClassVar[CoreLogLevel]  # value = <CoreLogLevel.INFO: 1>
+    WARN: typing.ClassVar[CoreLogLevel]  # value = <CoreLogLevel.WARN: 2>
+    __members__: typing.ClassVar[dict[str, CoreLogLevel]]  # value = {'DEBUG': <CoreLogLevel.DEBUG: 0>, 'INFO': <CoreLogLevel.INFO: 1>, 'WARN': <CoreLogLevel.WARN: 2>, 'ERROR': <CoreLogLevel.ERROR: 3>}
+    def __eq__(self, other: typing.Any) -> bool:
+        ...
+    def __getstate__(self) -> int:
+        ...
+    def __hash__(self) -> int:
+        ...
+    def __index__(self) -> int:
+        ...
+    def __init__(self, value: typing.SupportsInt | typing.SupportsIndex) -> None:
+        ...
+    def __int__(self) -> int:
+        ...
+    def __ne__(self, other: typing.Any) -> bool:
+        ...
+    def __repr__(self) -> str:
+        ...
+    def __setstate__(self, state: typing.SupportsInt | typing.SupportsIndex) -> None:
+        ...
+    def __str__(self) -> str:
+        ...
+    @property
+    def name(self) -> str:
+        ...
+    @property
+    def value(self) -> int:
         ...
 class CorePowerType:
     """
@@ -125,6 +189,12 @@ class CoreRelaySource(CoreSourceObject):
     def __init__(self, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: typing.SupportsInt | typing.SupportsIndex, arg2: typing.SupportsInt | typing.SupportsIndex) -> None:
         ...
     @property
+    def _input_slot_ptr(self) -> int:
+        ...
+    @property
+    def _output_slot_ptr(self) -> int:
+        ...
+    @property
     def delay(self) -> int:
         ...
     @property
@@ -137,6 +207,8 @@ class CoreSimulator:
         ...
     def bind_object(self, arg0: CoreConnectiveObject) -> None:
         ...
+    def enable_logging(self, arg0: CoreLogLevel) -> None:
+        ...
     def pause(self) -> None:
         ...
     def remove_tick_breakpoint(self, arg0: typing.SupportsInt | typing.SupportsIndex) -> None:
@@ -145,7 +217,7 @@ class CoreSimulator:
         ...
     def run(self) -> None:
         ...
-    def step(self) -> None:
+    def step(self) -> bool:
         ...
 class CoreSlotObject(CoreConnectiveObject):
     def __init__(self, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: CoreConnectiveObject, arg2: CorePowerType) -> None:
@@ -160,6 +232,12 @@ class CoreTorchSource(CoreSourceObject):
     def __init__(self, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: typing.SupportsInt | typing.SupportsIndex, arg2: typing.SupportsInt | typing.SupportsIndex) -> None:
         ...
     @property
+    def _bottom_slot_ptr(self) -> int:
+        ...
+    @property
+    def _power_slot_ptr(self) -> int:
+        ...
+    @property
     def delay(self) -> int:
         ...
     @property
@@ -168,7 +246,11 @@ class CoreTorchSource(CoreSourceObject):
 def register_plugin_from_ptr(arg0: str, arg1: typing.SupportsInt | typing.SupportsIndex, arg2: typing.SupportsInt | typing.SupportsIndex, arg3: typing.SupportsInt | typing.SupportsIndex) -> None:
     ...
 COMPARISON: CoreComparatorMode  # value = <CoreComparatorMode.COMPARISON: 0>
+DEBUG: CoreLogLevel  # value = <CoreLogLevel.DEBUG: 0>
+ERROR: CoreLogLevel  # value = <CoreLogLevel.ERROR: 3>
+INFO: CoreLogLevel  # value = <CoreLogLevel.INFO: 1>
 NONE: CorePowerType  # value = <CorePowerType.NONE: 0>
 STRONG: CorePowerType  # value = <CorePowerType.STRONG: 2>
 SUBTRACTION: CoreComparatorMode  # value = <CoreComparatorMode.SUBTRACTION: 1>
+WARN: CoreLogLevel  # value = <CoreLogLevel.WARN: 2>
 WEAK: CorePowerType  # value = <CorePowerType.WEAK: 1>
