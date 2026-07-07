@@ -8,7 +8,8 @@ from setuptools.command.build_ext import build_ext
 class CMakeExtension(Extension):
     def __init__(self, name, sourcedir=""):
         Extension.__init__(self, name, sources=[])
-        self.sourcedir = os.path.abspath(sourcedir)
+        setup_py_dir = os.path.abspath(os.path.dirname(__file__))
+        self.sourcedir = os.path.abspath(os.path.join(setup_py_dir, sourcedir))
 
 class CMakeBuild(build_ext):
     def build_extension(self, ext):
@@ -31,7 +32,7 @@ class CMakeBuild(build_ext):
 setup(
     package_dir={"": "src"},
     packages=find_packages(where="src"),
-    ext_modules=[CMakeExtension("redstonex._core")],
+    ext_modules=[CMakeExtension("redstonex._core", sourcedir=".")],
     cmdclass={"build_ext": CMakeBuild},
     package_data={
         "redstonex": [
