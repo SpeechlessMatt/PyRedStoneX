@@ -112,8 +112,8 @@ class RelaySource(_core.CoreRelaySource):
         auto_id = _get_next_id()
         super().__init__(auto_id, power, max_delay)
 
-    def set_delay():
-        pass
+    def set_delay(self, delay: int):
+        super().set_delay(delay)
 
     @property
     def input_slot(self):
@@ -129,10 +129,16 @@ class RelaySource(_core.CoreRelaySource):
     def disconnect(self, target) -> None:
         _safe_disconnect(self, target)
 
+class ComparatorSourceMode(_core.CoreComparatorSourceMode):
+    pass
+
 class ComparatorSource(_core.CoreComparatorSource):
     def __init__(self, delay: int = 1) -> None:
         auto_id = _get_next_id()
         super().__init__(auto_id, delay)
+
+    def set_mode(self, mode: ComparatorSourceMode):
+        super().set_mode(mode)
 
     @property
     def input_slot(self):
@@ -140,11 +146,11 @@ class ComparatorSource(_core.CoreComparatorSource):
 
     @property
     def calculate_slot_a(self):
-        return _core.CoreConnectiveObject.create_view(self._caculate_slot_a_ptr)
+        return _core.CoreConnectiveObject.create_view(self._calculate_slot_a_ptr)
     
     @property
     def calculate_slot_b(self):
-        return _core.CoreConnectiveObject.create_view(self._caculate_slot_b_ptr)
+        return _core.CoreConnectiveObject.create_view(self._calculate_slot_b_ptr)
 
     @property
     def output_slot(self):

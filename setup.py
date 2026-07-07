@@ -1,0 +1,43 @@
+# 以下全部来自Gemini
+import os
+import subprocess
+import sys
+from setuptools import Extension, setup, find_packages
+from setuptools.command.build_ext import build_ext
+
+class CMakeExtension(Extension):
+    def __init__(self, name, sourcedir=""):
+        Extension.__init__(self, name, sources=[])
+        self.sourcedir = os.path.abspath(sourcedir)
+
+class CMakeBuild(build_ext):
+    def build_extension(self, ext):
+        extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
+        
+        cmake_args = [
+            f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}",
+            f"-DPYTHON_EXECUTABLE={sys.executable}",
+            "-DCMAKE_BUILD_TYPE=Release"
+        ]
+
+        if not os.path.exists(self.build_temp):
+            os.makedirs(self.build_temp)
+
+        # 1. Configure CMake
+        subprocess.check_call(["cmake", ext.sourcedir] + cmake_args, cwd=self.build_temp)
+        # 2. Build C++ code
+        subprocess.check_call(["cmake", "--build", "."], cwd=self.build_temp)
+
+setup(
+    package_dir={"": "src"},
+    packages=find_packages(where="src"),
+    ext_modules=[CMakeExtension("redstonex._core")],
+    cmdclass={"build_ext": CMakeBuild},
+    package_data={
+        "redstonex": [
+            "*.pyi", 
+            "include/*.h"
+        ]
+    },
+    include_package_data=True,
+)

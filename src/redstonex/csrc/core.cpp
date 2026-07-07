@@ -128,6 +128,7 @@ class RelaySource : public SourceObject {
             if (relay_source) rsx_destroy_relay_source(relay_source); 
             obj = nullptr;
         }
+        void set_delay(uint32_t delay) { RSXRelaySource_set_delay(relay_source, delay); }
 };
 
 class ComparatorSource : public SourceObject {
@@ -143,6 +144,7 @@ class ComparatorSource : public SourceObject {
             if (comparator_source) rsx_destroy_comparator_source(comparator_source); 
             obj = nullptr;
         }
+        void set_mode(RSXComparatorSourceMode mode) { RSXComparatorSource_set_mode(comparator_source, mode); }
 };
 
 class TorchSource : public SourceObject {
@@ -368,6 +370,7 @@ PYBIND11_MODULE(_core, m) {
 
     py::class_<RelaySource, SourceObject>(m, "CoreRelaySource")
         .def(py::init<uint32_t, uint8_t, uint32_t>())
+        .def("set_delay", &RelaySource::set_delay)
         .def_property_readonly("delay", [](const RelaySource &self) {
             return reinterpret_cast<RSXRelaySource*>(self.get_raw())->delay;
         })
@@ -385,13 +388,14 @@ PYBIND11_MODULE(_core, m) {
             return reinterpret_cast<uintptr_t>(&raw->output_slot);
         }, py::return_value_policy::reference_internal);
 
-    py::enum_<RSXComparatorSourceMode>(m, "CoreComparatorMode")
+    py::enum_<RSXComparatorSourceMode>(m, "CoreComparatorSourceMode")
         .value("COMPARISON", RSXComparatorSourceMode::COMPARISON_MODE)
         .value("SUBTRACTION", RSXComparatorSourceMode::SUBTRACTION_MODE)
         .export_values();
 
     py::class_<ComparatorSource, SourceObject>(m, "CoreComparatorSource")
         .def(py::init<uint32_t, uint32_t>())
+        .def("set_mode", &ComparatorSource::set_mode)
         .def_property_readonly("delay", [](const ComparatorSource &self) {
             return reinterpret_cast<RSXComparatorSource*>(self.get_raw())->delay;
         })

@@ -1,11 +1,18 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0.0", "pybind11>=3.0.0", "cmake>=3.12"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "redstonex"
-version = "0.0.1"
-dependencies = []
+version = "0.1.1"
+description = "Python bindings for RedStoneX simulation backend"
+readme = "README.md" 
+requires-python = ">=3.10"
+authors = [{ name = "Czy_4201b" }]
 
-[tool.setuptools.packages.find]
-include = ["redstonex*"]
+license = "GPL-3.0-or-later"
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++",
+]

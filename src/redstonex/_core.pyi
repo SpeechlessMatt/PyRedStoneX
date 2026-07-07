@@ -3,11 +3,34 @@ RedStoneX 引擎核心
 """
 from __future__ import annotations
 import typing
-__all__: list[str] = ['COMPARISON', 'CoreBlock', 'CoreComparatorMode', 'CoreComparatorSource', 'CoreConnectiveObject', 'CoreCustomObject', 'CoreLineObject', 'CoreLogLevel', 'CorePowerType', 'CoreRelaySource', 'CoreSimulator', 'CoreSlotObject', 'CoreSourceObject', 'CoreTorchSource', 'DEBUG', 'ERROR', 'INFO', 'NONE', 'STRONG', 'SUBTRACTION', 'WARN', 'WEAK', 'register_plugin_from_ptr']
+__all__: list[str] = ['COMPARISON', 'CoreBlock', 'CoreComparatorSource', 'CoreComparatorSourceMode', 'CoreConnectiveObject', 'CoreCustomObject', 'CoreLineObject', 'CoreLogLevel', 'CorePowerType', 'CoreRelaySource', 'CoreSimulator', 'CoreSlotObject', 'CoreSourceObject', 'CoreTorchSource', 'DEBUG', 'ERROR', 'INFO', 'NONE', 'STRONG', 'SUBTRACTION', 'WARN', 'WEAK', 'register_plugin_from_ptr']
 class CoreBlock(CoreLineObject):
     def __init__(self, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: typing.SupportsInt | typing.SupportsIndex) -> None:
         ...
-class CoreComparatorMode:
+class CoreComparatorSource(CoreSourceObject):
+    def __init__(self, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: typing.SupportsInt | typing.SupportsIndex) -> None:
+        ...
+    def set_mode(self, arg0: CoreComparatorSourceMode) -> None:
+        ...
+    @property
+    def _calculate_slot_a_ptr(self) -> int:
+        ...
+    @property
+    def _calculate_slot_b_ptr(self) -> int:
+        ...
+    @property
+    def _input_slot_ptr(self) -> int:
+        ...
+    @property
+    def _output_slot_ptr(self) -> int:
+        ...
+    @property
+    def delay(self) -> int:
+        ...
+    @property
+    def mode(self) -> CoreComparatorSourceMode:
+        ...
+class CoreComparatorSourceMode:
     """
     Members:
     
@@ -15,9 +38,9 @@ class CoreComparatorMode:
     
       SUBTRACTION
     """
-    COMPARISON: typing.ClassVar[CoreComparatorMode]  # value = <CoreComparatorMode.COMPARISON: 0>
-    SUBTRACTION: typing.ClassVar[CoreComparatorMode]  # value = <CoreComparatorMode.SUBTRACTION: 1>
-    __members__: typing.ClassVar[dict[str, CoreComparatorMode]]  # value = {'COMPARISON': <CoreComparatorMode.COMPARISON: 0>, 'SUBTRACTION': <CoreComparatorMode.SUBTRACTION: 1>}
+    COMPARISON: typing.ClassVar[CoreComparatorSourceMode]  # value = <CoreComparatorSourceMode.COMPARISON: 0>
+    SUBTRACTION: typing.ClassVar[CoreComparatorSourceMode]  # value = <CoreComparatorSourceMode.SUBTRACTION: 1>
+    __members__: typing.ClassVar[dict[str, CoreComparatorSourceMode]]  # value = {'COMPARISON': <CoreComparatorSourceMode.COMPARISON: 0>, 'SUBTRACTION': <CoreComparatorSourceMode.SUBTRACTION: 1>}
     def __eq__(self, other: typing.Any) -> bool:
         ...
     def __getstate__(self) -> int:
@@ -43,27 +66,6 @@ class CoreComparatorMode:
         ...
     @property
     def value(self) -> int:
-        ...
-class CoreComparatorSource(CoreSourceObject):
-    def __init__(self, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: typing.SupportsInt | typing.SupportsIndex) -> None:
-        ...
-    @property
-    def _calculate_slot_a_ptr(self) -> int:
-        ...
-    @property
-    def _calculate_slot_b_ptr(self) -> int:
-        ...
-    @property
-    def _input_slot_ptr(self) -> int:
-        ...
-    @property
-    def _output_slot_ptr(self) -> int:
-        ...
-    @property
-    def delay(self) -> int:
-        ...
-    @property
-    def mode(self) -> CoreComparatorMode:
         ...
 class CoreConnectiveObject:
     @staticmethod
@@ -188,6 +190,8 @@ class CorePowerType:
 class CoreRelaySource(CoreSourceObject):
     def __init__(self, arg0: typing.SupportsInt | typing.SupportsIndex, arg1: typing.SupportsInt | typing.SupportsIndex, arg2: typing.SupportsInt | typing.SupportsIndex) -> None:
         ...
+    def set_delay(self, arg0: typing.SupportsInt | typing.SupportsIndex) -> None:
+        ...
     @property
     def _input_slot_ptr(self) -> int:
         ...
@@ -245,12 +249,12 @@ class CoreTorchSource(CoreSourceObject):
         ...
 def register_plugin_from_ptr(arg0: str, arg1: typing.SupportsInt | typing.SupportsIndex, arg2: typing.SupportsInt | typing.SupportsIndex, arg3: typing.SupportsInt | typing.SupportsIndex) -> None:
     ...
-COMPARISON: CoreComparatorMode  # value = <CoreComparatorMode.COMPARISON: 0>
+COMPARISON: CoreComparatorSourceMode  # value = <CoreComparatorSourceMode.COMPARISON: 0>
 DEBUG: CoreLogLevel  # value = <CoreLogLevel.DEBUG: 0>
 ERROR: CoreLogLevel  # value = <CoreLogLevel.ERROR: 3>
 INFO: CoreLogLevel  # value = <CoreLogLevel.INFO: 1>
 NONE: CorePowerType  # value = <CorePowerType.NONE: 0>
 STRONG: CorePowerType  # value = <CorePowerType.STRONG: 2>
-SUBTRACTION: CoreComparatorMode  # value = <CoreComparatorMode.SUBTRACTION: 1>
+SUBTRACTION: CoreComparatorSourceMode  # value = <CoreComparatorSourceMode.SUBTRACTION: 1>
 WARN: CoreLogLevel  # value = <CoreLogLevel.WARN: 2>
 WEAK: CorePowerType  # value = <CorePowerType.WEAK: 1>
