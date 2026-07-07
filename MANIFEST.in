@@ -1,0 +1,4 @@
+include CMakeLists.txt
+recursive-include src/redstonex/csrc *
+recursive-include src/redstonex/include *
+recursive-include extern/RedStoneX *
