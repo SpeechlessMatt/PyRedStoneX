@@ -24,6 +24,9 @@ project(
 find_package(pybind11 REQUIRED)
 
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+if(MSVC)
+    add_compile_definitions(CLOCK_MONOTONIC=1)
+endif()
 
 # RedStoneX
 set(REDSTONEX_INSTALL OFF)
