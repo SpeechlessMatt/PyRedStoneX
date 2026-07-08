@@ -17,7 +17,6 @@ cmake_minimum_required(VERSION 3.15)
 
 project(
     PyRedStoneX
-    VERSION 0.1.1
     LANGUAGES C CXX
 )
 
@@ -28,6 +27,7 @@ find_package(Python REQUIRED COMPONENTS Interpreter Development)
 find_package(pybind11 REQUIRED)
 
 # RedStoneX
+set(REDSTONEX_INSTALL OFF)
 add_subdirectory(extern/RedStoneX)
 
 # PyRedStoneX
