@@ -23,13 +23,8 @@ project(
 # Python/pybind11
 find_package(pybind11 REQUIRED)
 
-set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 if(MSVC)
-    set(EMPTY_MAIN "${CMAKE_CURRENT_BINARY_DIR}/empty_main.c")
-    file(WRITE "${EMPTY_MAIN}" "int main() { return 0; }\n")
-    set_target_properties(high_churn_torch_oscillators_benchmark PROPERTIES SOURCES "${EMPTY_MAIN}")
-    set_target_properties(high_fan_out_benchmark PROPERTIES SOURCES "${EMPTY_MAIN}")
-    set_target_properties(long_chain_benchmark PROPERTIES SOURCES "${EMPTY_MAIN}")
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 
 # RedStoneX
