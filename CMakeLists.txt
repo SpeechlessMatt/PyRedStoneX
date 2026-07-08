@@ -13,41 +13,62 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-cmake_minimum_required(VERSION 3.12)
-project(PyRedStoneX)
+cmake_minimum_required(VERSION 3.15)
 
+project(
+    PyRedStoneX
+    VERSION 0.1.1
+    LANGUAGES C CXX
+)
+
+# Python/pybind11
 set(PYBIND11_FINDPYTHON ON)
+
 find_package(Python REQUIRED COMPONENTS Interpreter Development)
 find_package(pybind11 REQUIRED)
 
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
-endif()
+# RedStoneX
+add_subdirectory(extern/RedStoneX)
 
-set(REDSTONEX_SRCS
-    extern/RedStoneX/src/redstonex_sim.c
-    extern/RedStoneX/src/redstonex_obj.c
-    extern/RedStoneX/src/redstonex_components.c
+# PyRedStoneX
+pybind11_add_module(_core 
+    src/redstonex/csrc/core.cpp
 )
 
-add_library(redstonex STATIC ${REDSTONEX_SRCS})
-target_include_directories(redstonex PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/extern/RedStoneX/include)
-set_target_properties(redstonex PROPERTIES POSITION_INDEPENDENT_CODE ON)
-
-pybind11_add_module(_core src/redstonex/csrc/core.cpp)
-pybind11_strip(_core)
-
-target_include_directories(_core PRIVATE 
-    ${CMAKE_CURRENT_SOURCE_DIR}/extern/RedStoneX/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/redstonex/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
+target_include_directories(_core 
+    PRIVATE 
+        src
+        src/redstonex/include
 )
 
-target_link_libraries(_core PRIVATE redstonex)
+target_link_libraries(_core 
+    PRIVATE 
+        redstonex
+)
 
-if(NOT DEFINED CMAKE_LIBRARY_OUTPUT_DIRECTORY)
-    set_target_properties(_core PROPERTIES 
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/redstonex"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/redstonex"
-    )
+# Linux/macOS runtime search path
+if(UNIX)
+    if(APPLE)
+        set_target_properties(_core PROPERTIES
+            INSTALL_RPATH "@loader_path"
+            BUILD_RPATH "@loader_path"
+        )
+    else()
+        set_target_properties(_core PROPERTIES
+            INSTALL_RPATH "$ORIGIN"
+            BUILD_RPATH "$ORIGIN"
+        )
+    endif()
 endif()
+
+# install
+include(GNUInstallDirs)
+
+install(
+    TARGETS
+        redstonex
+        _core
+
+    LIBRARY DESTINATION redstonex
+    RUNTIME DESTINATION redstonex
+)

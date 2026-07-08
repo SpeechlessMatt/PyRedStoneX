@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "redstonex_gate_plugin_example"
+version = "0.1.0"
+description = "A PyRedStoneX plugin example"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C",
+]
+
+[tool.setuptools]
+package_dir = {"" = "src"}
+packages = ["gate_plugin"]
