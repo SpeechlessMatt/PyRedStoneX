@@ -21,9 +21,6 @@ project(
 )
 
 # Python/pybind11
-set(PYBIND11_FINDPYTHON ON)
-
-find_package(Python REQUIRED COMPONENTS Interpreter Development)
 find_package(pybind11 REQUIRED)
 
 # RedStoneX
