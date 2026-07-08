@@ -141,5 +141,3 @@ if __name__ == "__main__":
     assert line_L3.power == expected_L3_power[5]
     assert line_L4.power == expected_L4_power[5]
     assert line_L5.power == expected_L5_power[5]
-
-    print("All RedStoneX Python simulator integration tests passed successfully!")
