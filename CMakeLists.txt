@@ -23,6 +23,8 @@ project(
 # Python/pybind11
 find_package(pybind11 REQUIRED)
 
+set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
 # RedStoneX
 set(REDSTONEX_INSTALL OFF)
 add_subdirectory(extern/RedStoneX)
