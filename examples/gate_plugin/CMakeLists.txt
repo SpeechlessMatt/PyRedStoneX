@@ -28,6 +28,11 @@ add_library(gate_core SHARED
     src/gate_plugin/csrc/gate_plugin.c
 )
 
+set_target_properties(gate_core PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/gate_plugin"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/gate_plugin"
+)
+
 target_include_directories(gate_core
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/gate_plugin/include

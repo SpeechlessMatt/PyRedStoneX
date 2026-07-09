@@ -1,7 +1,7 @@
 [build-system]
 requires = [
     "scikit-build-core>=0.10",
-    "redstonex",
+    "redstonex>=0.1.2rc1",
     "setuptools-scm"
 ]
 build-backend = "scikit_build_core.build"

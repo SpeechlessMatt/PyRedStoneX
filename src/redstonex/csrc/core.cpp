@@ -340,7 +340,6 @@ class CustomObject : public ConnectiveObject {
                         
                         return py::cast(wrapped_slot, py::return_value_policy::take_ownership);
                     }
-                    case TYPE_NONE:   return py::none();
                     default: break; 
                 }
             }
