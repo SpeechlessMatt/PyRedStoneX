@@ -16,9 +16,11 @@
  */
 
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <pybind11/detail/common.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/pytypes.h>
 #include <sys/types.h>
 #include <unordered_map>
 
@@ -29,7 +31,7 @@ extern "C" {
 #include "redstonex_types.h"
 }
 
-#include <plugin.h>
+#include "redstonex/plugin.h"
 
 #define ANSI_RESET   "\033[0m"
 #define ANSI_DEBUG   "\033[36m"  // 青色
@@ -48,10 +50,10 @@ class ConnectiveObject {
         ConnectiveObject(RSXConnectiveObject* raw_obj) : obj(raw_obj) {}
         ConnectiveObject(uint32_t id, RSXObjectRole role, uint32_t limit, bool is_lossless, bool is_weak_transmissible) { obj = rsx_create_object(id, role, limit, is_lossless, is_weak_transmissible); }
 
-        static ConnectiveObject create_view(uintptr_t raw_ptr) {
-            ConnectiveObject view(nullptr);
-            view.obj = reinterpret_cast<RSXConnectiveObject*>(raw_ptr);
-            view.owned_by_cpp = false; // 不拥有内存
+        static ConnectiveObject* create_view(uintptr_t raw_ptr) {
+            ConnectiveObject* view = new ConnectiveObject(nullptr);
+            view->obj = reinterpret_cast<RSXConnectiveObject*>(raw_ptr);
+            view->owned_by_cpp = false; // 不拥有内存
             return view;
         }
         
@@ -104,13 +106,15 @@ class SlotObject : public ConnectiveObject {
         RSXSlotObject* slot;
 
     public:
-        SlotObject(RSXSlotObject* raw_slot, bool owner = false) : ConnectiveObject(reinterpret_cast<RSXConnectiveObject*>(raw_slot)), slot(raw_slot) {}
+        SlotObject(RSXSlotObject* raw_slot, bool owner = false) : ConnectiveObject(reinterpret_cast<RSXConnectiveObject*>(raw_slot)), slot(raw_slot) {
+            owned_by_cpp = owner;
+        }
         SlotObject(uint32_t id, const ConnectiveObject& parent, RSXPowerType source_power_type) : ConnectiveObject(nullptr) { 
             slot = rsx_create_slot_object(id, parent.get_raw(), source_power_type); 
             obj = reinterpret_cast<RSXConnectiveObject*>(slot);
         }
         ~SlotObject() override { 
-            if (slot) rsx_destroy_slot_object(slot); 
+            if (slot && owned_by_cpp) rsx_destroy_slot_object(slot); 
             obj = nullptr;
         }
 };
@@ -249,6 +253,10 @@ class CustomObject : public ConnectiveObject {
 
             // 这部分的动态args由Gemini生成，目前来看基本没有问题
             // 为了兼容C语言开发的插件，毕竟引擎本身就是纯C
+            // 核心思想是通过打包一个结构体放满函数指针
+            // 然后C插件开发者便可以通过不同的函数指针来获取他需要的对应类型的数据
+            // 我作为桥接层，只要把pybind带来的方法做成回调转发过去
+            // 这确实厉害，Gemini真厉害
             if (ops.create) {
                 PluginArgs args_tool;
                 args_tool.py_kwargs_ptr = &kwargs;
@@ -300,6 +308,15 @@ class CustomObject : public ConnectiveObject {
         }
 
         // 来自Gemini C++胶水层代码有很多是由Gemini辅助完成的
+        // 与上面的处理思想几乎一致，非常聪明的做法
+        // Gemini还是很强的
+        // 2026/7/9 我还是回来修了，原先的指针传递很聪明，但是风格还是让人不满意
+        // 在堆上开辟内存然后移交给python管理我觉得更符合我的直觉
+        // 虽然我估计也不是最优解，但是这是我能想到的算是能过得去的解法
+        // 毕竟这个SlotObject本质上是从属与结构体的指针
+        // 但是python需要一个对象来操作这个指针，所以创建一个不会释放内存的对象并移交给python
+        // python就能顺利成章的使用该对象里面的指针来进行各种操作
+        // 这种写法风格会统一一点
         py::object get_dynamic_property(const std::string& name) const {
             if (!obj) throw py::attribute_error("Object is null");
 
@@ -310,14 +327,20 @@ class CustomObject : public ConnectiveObject {
                     case TYPE_DOUBLE: return py::cast(res.value.v_double);
                     case TYPE_BOOL:   return py::cast(res.value.v_bool != 0);
                     case TYPE_STRING: return py::cast(res.value.v_string);
+                    case TYPE_PTR: {
+                        if (!res.value.v_ptr) return py::none();
+                        
+                        return py::cast(reinterpret_cast<uintptr_t>(res.value.v_ptr));
+                    }
                     case TYPE_SLOT_PTR: {
                         if (!res.value.v_ptr) return py::none();
                 
                         auto* raw_slot = reinterpret_cast<RSXSlotObject*>(res.value.v_ptr);
-                        SlotObject wrapped_slot(raw_slot, false);
+                        SlotObject* wrapped_slot = new SlotObject(raw_slot, false);
                         
-                        return py::cast(wrapped_slot, py::return_value_policy::reference_internal);
+                        return py::cast(wrapped_slot, py::return_value_policy::take_ownership);
                     }
+                    case TYPE_NONE:   return py::none();
                     default: break; 
                 }
             }
@@ -326,6 +349,10 @@ class CustomObject : public ConnectiveObject {
 };
 
 void register_plugin_from_ptr(const std::string& name, size_t create_ptr, size_t destroy_ptr, size_t get_prop_ptr) {
+    if (create_ptr == 0 || destroy_ptr == 0 || get_prop_ptr == 0) {
+        throw std::invalid_argument("Plugin function pointers cannot be null.");
+    }
+
     ComponentOps ops;
     ops.create  = reinterpret_cast<void* (*)(PluginArgs*)>(create_ptr);
     ops.destroy = reinterpret_cast<void (*)(void*)>(destroy_ptr);
@@ -337,6 +364,9 @@ void register_plugin_from_ptr(const std::string& name, size_t create_ptr, size_t
 PYBIND11_MODULE(_core, m) {
     m.doc() = "RedStoneX 引擎核心";
 
+    py::exception<std::runtime_error> limit_err(m, "ConnectionLimitError");
+    py::exception<std::runtime_error> conn_err(m, "ConnectiveError");
+
     py::enum_<RSXPowerType>(m, "CorePowerType")
         .value("NONE", RSXPowerType::RSX_POWER_NONE)
         .value("WEAK", RSXPowerType::RSX_POWER_WEAK)
@@ -344,9 +374,84 @@ PYBIND11_MODULE(_core, m) {
         .export_values();
 
     py::class_<ConnectiveObject>(m, "CoreConnectiveObject")
-        .def_static("create_view", &ConnectiveObject::create_view)
-        .def("connect", &ConnectiveObject::connect)
-        .def("disconnect", &ConnectiveObject::disconnect)
+        .def("__repr__", [](const ConnectiveObject &self) {
+            std::stringstream ss;
+
+            try {
+                std::string class_name = py::cast(&self).attr("__class__").attr("__name__").cast<std::string>();
+                
+                ss << "<" << class_name << " id=" << self.get_raw()->id;
+                ss << " connect_count=" << self.get_raw()->connect_count;
+                ss << ">";
+            } catch (...) {
+                ss << "<CoreConnectiveObject id=" << self.get_raw()->id << " connect_count=" << self.get_raw()->connect_count << ">";
+            }
+
+            return ss.str();
+        })
+        .def("__str__", [](const ConnectiveObject &self) {
+            std::stringstream ss;
+
+            try {
+                std::string class_name = py::cast(&self).attr("__class__").attr("__name__").cast<std::string>();
+                
+                ss << "[" << class_name << " #" << self.get_raw()->id << "]\n"
+                   << " ├── Power      : " << (int)self.get_raw()->power << "\n"
+                   << " ├── Capacity   : " << self.get_raw()->connect_count << " / " << self.get_raw()->limit << " (Connected/Limit)\n"
+                   << " └── Connections: " << "[";
+
+                for (uint32_t i = 0; i < self.get_raw()->connect_count; i++) {
+                    ss << "#" << self.get_raw()->connect_set[i]->id;
+                    if (i < self.get_raw()->connect_count - 1) {
+                        ss << ", ";
+                    }
+                }
+
+                ss << "]\n";
+            } catch (...) {
+                ss << "[" << "CoreConnectiveObject" << " #" << self.get_raw()->id << "]\n"
+                   << " ├── Power      : " << (int)self.get_raw()->power << "\n"
+                   << " ├── Capacity   : " << self.get_raw()->connect_count << " / " << self.get_raw()->limit << " (Connected/Limit)\n"
+                   << " └── Connections: " << "[";
+
+                for (uint32_t i = 0; i < self.get_raw()->connect_count; i++) {
+                    ss << "#" << self.get_raw()->connect_set[i]->id;
+                    if (i < self.get_raw()->connect_count - 1) {
+                        ss << ", ";
+                    }
+                }
+
+                ss << "]\n";
+            }
+
+            return ss.str();
+        })
+
+        .def("connect", [limit_err, conn_err](ConnectiveObject &self, ConnectiveObject &target) {
+            bool success = self.connect(target);
+
+            if (!success) {
+                if (self.get_raw()->connect_count >= self.get_raw()->limit) {
+                    std::string msg = "[Connection failed] Connection Limit Error: connection is limited to " 
+                                      + std::to_string(self.get_raw()->limit);
+                    py::set_error(limit_err, msg.c_str());
+                    throw py::error_already_set();
+                }
+
+                std::string msg = "[Connection refused by RedStoneX] Connective Error: Type not Matched!";
+                py::set_error(conn_err, msg.c_str());
+                throw py::error_already_set();
+            }
+        })
+        .def("disconnect", [conn_err](ConnectiveObject &self, ConnectiveObject &target) {
+            bool success = self.disconnect(target);
+
+            if (!success) {
+                std::string msg = "[Disconnection refused by RedStoneX] Connective Error: Disconnect Failed!";
+                py::set_error(conn_err, msg.c_str());
+                throw py::error_already_set();
+            }
+        })
         .def_property_readonly("id", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->id : 0; })
         .def_property_readonly("uri", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->uri : ""; })
         .def_property_readonly("power", [](const ConnectiveObject &self) { return self.get_raw() ? self.get_raw()->power : 0; })
@@ -378,15 +483,21 @@ PYBIND11_MODULE(_core, m) {
             return reinterpret_cast<RSXRelaySource*>(self.get_raw())->relay_power;
         })
 
-        .def_property_readonly("_input_slot_ptr", [](const RelaySource &self) {
+        .def_property_readonly("_input_slot", [](const RelaySource &self) -> py::object {
             auto* raw = reinterpret_cast<RSXRelaySource*>(self.get_raw());
-            return reinterpret_cast<uintptr_t>(&raw->input_slot);
-        }, py::return_value_policy::reference_internal)
+            if (!raw) return py::none();
 
-        .def_property_readonly("_output_slot_ptr", [](const RelaySource &self) {
+            SlotObject* view = new SlotObject(&raw->input_slot, false);
+            return py::cast(view, py::return_value_policy::take_ownership);
+        })
+
+        .def_property_readonly("_output_slot", [](const RelaySource &self) -> py::object {
             auto* raw = reinterpret_cast<RSXRelaySource*>(self.get_raw());
-            return reinterpret_cast<uintptr_t>(&raw->output_slot);
-        }, py::return_value_policy::reference_internal);
+            if (!raw) return py::none();
+
+            SlotObject* view = new SlotObject(&raw->output_slot, false);
+            return py::cast(view, py::return_value_policy::take_ownership);
+        });
 
     py::enum_<RSXComparatorSourceMode>(m, "CoreComparatorSourceMode")
         .value("COMPARISON", RSXComparatorSourceMode::COMPARISON_MODE)
@@ -403,25 +514,37 @@ PYBIND11_MODULE(_core, m) {
             return reinterpret_cast<RSXComparatorSource*>(self.get_raw())->mode;
         })
 
-        .def_property_readonly("_input_slot_ptr", [](const ComparatorSource &self) {
+        .def_property_readonly("_input_slot", [](const ComparatorSource &self) -> py::object {
             auto* raw = reinterpret_cast<RSXComparatorSource*>(self.get_raw());
-            return reinterpret_cast<uintptr_t>(&raw->input_slot);
-        }, py::return_value_policy::reference_internal)
+            if (!raw) return py::none();
 
-        .def_property_readonly("_calculate_slot_a_ptr", [](const ComparatorSource &self) {
-            auto* raw = reinterpret_cast<RSXComparatorSource*>(self.get_raw());
-            return reinterpret_cast<uintptr_t>(&raw->calculate_slot_a);
-        }, py::return_value_policy::reference_internal)
+            SlotObject* view = new SlotObject(&raw->input_slot, false);
+            return py::cast(view, py::return_value_policy::take_ownership);
+        })
 
-        .def_property_readonly("_calculate_slot_b_ptr", [](const ComparatorSource &self) {
+        .def_property_readonly("_calculate_slot_a", [](const ComparatorSource &self) -> py::object {
             auto* raw = reinterpret_cast<RSXComparatorSource*>(self.get_raw());
-            return reinterpret_cast<uintptr_t>(&raw->calculate_slot_b);
-        }, py::return_value_policy::reference_internal)
+            if (!raw) return py::none();
 
-        .def_property_readonly("_output_slot_ptr", [](const ComparatorSource &self) {
+            SlotObject* view = new SlotObject(&raw->calculate_slot_a, false);
+            return py::cast(view, py::return_value_policy::take_ownership);
+        })
+
+        .def_property_readonly("_calculate_slot_b", [](const ComparatorSource &self) -> py::object {
             auto* raw = reinterpret_cast<RSXComparatorSource*>(self.get_raw());
-            return reinterpret_cast<uintptr_t>(&raw->output_slot);
-        }, py::return_value_policy::reference_internal);
+            if (!raw) return py::none();
+
+            SlotObject* view = new SlotObject(&raw->calculate_slot_b, false);
+            return py::cast(view, py::return_value_policy::take_ownership);
+        })
+
+        .def_property_readonly("_output_slot", [](const ComparatorSource &self) -> py::object {
+            auto* raw = reinterpret_cast<RSXComparatorSource*>(self.get_raw());
+            if (!raw) return py::none();
+
+            SlotObject* view = new SlotObject(&raw->output_slot, false);
+            return py::cast(view, py::return_value_policy::take_ownership);
+        });
 
     py::class_<TorchSource, SourceObject>(m, "CoreTorchSource")
         .def(py::init<uint32_t, uint8_t, uint32_t>())
@@ -432,15 +555,21 @@ PYBIND11_MODULE(_core, m) {
             return reinterpret_cast<RSXTorchSource*>(self.get_raw())->torch_power;
         })
 
-        .def_property_readonly("_bottom_slot_ptr", [](const TorchSource &self) {
+        .def_property_readonly("_bottom_slot", [](const TorchSource &self) -> py::object {
             auto* raw = reinterpret_cast<RSXTorchSource*>(self.get_raw());
-            return reinterpret_cast<uintptr_t>(&raw->bottom_slot);
-        }, py::return_value_policy::reference_internal)
+            if (!raw) return py::none();
 
-        .def_property_readonly("_power_slot_ptr", [](const TorchSource &self) {
+            SlotObject* view = new SlotObject(&raw->bottom_slot, false);
+            return py::cast(view, py::return_value_policy::take_ownership);
+        })
+
+        .def_property_readonly("_power_slot", [](const TorchSource &self) -> py::object {
             auto* raw = reinterpret_cast<RSXTorchSource*>(self.get_raw());
-            return reinterpret_cast<uintptr_t>(&raw->power_slot);
-        }, py::return_value_policy::reference_internal);
+            if (!raw) return py::none();
+
+            SlotObject* view = new SlotObject(&raw->power_slot, false);
+            return py::cast(view, py::return_value_policy::take_ownership);
+        });
 
     py::class_<Block, LineObject>(m, "CoreBlock")
         .def(py::init<uint32_t, uint32_t>());

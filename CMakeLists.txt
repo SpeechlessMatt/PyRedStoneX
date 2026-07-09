@@ -21,6 +21,7 @@ project(
 )
 
 # Python/pybind11
+set(PYBIND11_FINDPYTHON ON)
 find_package(pybind11 REQUIRED)
 
 if(MSVC)
@@ -28,8 +29,7 @@ if(MSVC)
 endif()
 
 # RedStoneX
-set(REDSTONEX_INSTALL OFF)
-add_subdirectory(extern/RedStoneX)
+add_subdirectory(extern/RedStoneX EXCLUDE_FROM_ALL)
 
 # PyRedStoneX
 pybind11_add_module(_core 
@@ -37,13 +37,14 @@ pybind11_add_module(_core
 )
 
 target_include_directories(_core 
-    PRIVATE 
-        src
-        src/redstonex/include
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/redstonex/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/extern/RedStoneX/include
 )
 
 target_link_libraries(_core 
-    PRIVATE 
+    PUBLIC
         redstonex
 )
 
@@ -66,10 +67,47 @@ endif()
 include(GNUInstallDirs)
 
 install(
-    TARGETS
-        redstonex
-        _core
-
+    TARGETS _core
     LIBRARY DESTINATION redstonex
+)
+
+install(
+    TARGETS redstonex
+    EXPORT PyRedStoneXTargets
+    LIBRARY DESTINATION redstonex
+    ARCHIVE DESTINATION redstonex
     RUNTIME DESTINATION redstonex
+)
+
+install(
+    DIRECTORY extern/RedStoneX/include/
+    DESTINATION redstonex/include
+)
+
+install(
+    DIRECTORY src/redstonex/include/
+    DESTINATION redstonex/include
+)
+
+set_target_properties(redstonex PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/redstonex/include>"
+)
+
+install(
+    EXPORT PyRedStoneXTargets
+    FILE PyRedStoneXTargets.cmake
+    NAMESPACE PyRedStoneX::
+    DESTINATION redstonex/cmake
+)
+
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/CMake/PyRedStoneXConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/PyRedStoneXConfig.cmake"
+    INSTALL_DESTINATION redstonex/cmake
+)
+
+install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/PyRedStoneXConfig.cmake"
+    DESTINATION redstonex/cmake
 )

@@ -24,51 +24,10 @@ def _get_next_id() -> int:
     _id_counter += 1
     return _id_counter
 
-class ConnectiveError(Exception):
-    def __init__(self, message: str, source = None, target = None) -> None:
-        full_message = f"[{message}] " if message else ""
-        if source and target:
-            full_message += f"Source: {source.__class__.__name__} -> Target: {target.__class__.__name__} | Connective Error: Type not Matched!"
-        else:
-            full_message += "Connective Error: Type not Matched!"
-        super().__init__(full_message)
-
-        self.source = source
-        self.target = target
-
-class ConnectionLimitError(Exception):
-    def __init__(self, message: str, limit: int = 1) -> None:
-        full_message = f"[{message}] " if message else ""
-        full_message += f"Connection Limit Error: connection is limited to {limit}"
-
-        super().__init__(full_message)
-
-def _safe_connect(source_py_obj, target_py_obj):
-    success = super(source_py_obj.__class__, source_py_obj).connect(target_py_obj)
-
-    if not success:
-        if hasattr(source_py_obj, "limit") and hasattr(source_py_obj, "connect_count"):
-            if source_py_obj.connect_count >= source_py_obj.limit:
-                raise ConnectionLimitError("Connection failed", source_py_obj.limit)
-        
-        raise ConnectiveError("Connection refused by RedStoneX", source=source_py_obj, target=target_py_obj)
-
-def _safe_disconnect(source_py_obj, target_py_obj):
-    success = super(source_py_obj.__class__, source_py_obj).connect(target_py_obj)
-
-    if not success:
-        raise ConnectiveError("Disconnection refused by RedStoneX", source=source_py_obj, target=target_py_obj)
-
 class Line(_core.CoreLineObject):
     def __init__(self, limit: int = 4) -> None:
         auto_id = _get_next_id()
         super().__init__(auto_id, limit)
-
-    def connect(self, target) -> None:
-        _safe_connect(self, target)
-
-    def disconnect(self, target) -> None:
-        _safe_disconnect(self, target)
 
 class Source(_core.CoreSourceObject):
     """代表所有能发出红石源头的信号源
@@ -82,22 +41,10 @@ class Source(_core.CoreSourceObject):
         auto_id = _get_next_id()
         super().__init__(auto_id, limit, power)
 
-    def connect(self, target) -> None:
-        _safe_connect(self, target)
-
-    def disconnect(self, target) -> None:
-        _safe_disconnect(self, target)
-
 class Slot(_core.CoreSlotObject):
     def __init__(self, parent: _core.ConnectiveObject, power_type: PowerType = PowerType.NONE) -> None:
         auto_id = _get_next_id()
         super().__init__(auto_id, parent, power_type)
-
-    def connect(self, target) -> None:
-        _safe_connect(self, target)
-
-    def disconnect(self, target) -> None:
-        _safe_disconnect(self, target)
 
 class RelaySource(_core.CoreRelaySource):
     """红石中继器，连接的时候不能直接连接他的本体哦，只能连接他的input_slot和output_slot
@@ -117,17 +64,11 @@ class RelaySource(_core.CoreRelaySource):
 
     @property
     def input_slot(self):
-        return _core.CoreConnectiveObject.create_view(self._input_slot_ptr)
+        return self._input_slot
 
     @property
     def output_slot(self):
-        return _core.CoreConnectiveObject.create_view(self._output_slot_ptr)
-
-    def connect(self, target) -> None:
-        _safe_connect(self, target)
-
-    def disconnect(self, target) -> None:
-        _safe_disconnect(self, target)
+        return self._output_slot
 
 class ComparatorSourceMode(_core.CoreComparatorSourceMode):
     pass
@@ -142,55 +83,37 @@ class ComparatorSource(_core.CoreComparatorSource):
 
     @property
     def input_slot(self):
-        return _core.CoreConnectiveObject.create_view(self._input_slot_ptr)
+        return self._input_slot
 
     @property
     def calculate_slot_a(self):
-        return _core.CoreConnectiveObject.create_view(self._calculate_slot_a_ptr)
+        return self._calculate_slot_a
     
     @property
     def calculate_slot_b(self):
-        return _core.CoreConnectiveObject.create_view(self._calculate_slot_b_ptr)
+        return self._calculate_slot_b
 
     @property
     def output_slot(self):
-        return _core.CoreConnectiveObject.create_view(self._output_slot_ptr)
-
-    def connect(self, target) -> None:
-        _safe_connect(self, target)
-
-    def disconnect(self, target) -> None:
-        _safe_disconnect(self, target)
+        return self._output_slot
 
 class TorchSource(_core.CoreTorchSource):
     def __init__(self, power: int = 15, delay: int = 1) -> None:
         auto_id = _get_next_id()
         super().__init__(auto_id, power, delay)
 
-    def connect(self, target) -> None:
-        _safe_connect(self, target)
-
-    def disconnect(self, target) -> None:
-        _safe_disconnect(self, target)
-
     @property
     def bottom_slot(self):
-        return _core.CoreConnectiveObject.create_view(self._bottom_slot_ptr)
+        return self._bottom_slot
 
     @property
     def power_slot(self):
-        return _core.CoreConnectiveObject.create_view(self._power_slot_ptr)
+        return self._power_slot
 
 class Block(_core.CoreBlock):
     def __init__(self, limit: int = 6) -> None:
         auto_id = _get_next_id()
         super().__init__(auto_id, limit)
-
-    def connect(self, target) -> None:
-        _safe_connect(self, target)
-
-    def disconnect(self, target) -> None:
-        _safe_disconnect(self, target)
 
 class Custom(_core.CoreCustomObject):
     def __init__(self, plugin_name: str, **kwargs) -> None:
@@ -198,9 +121,3 @@ class Custom(_core.CoreCustomObject):
         kwargs["id"] = auto_id
         
         super().__init__(plugin_name, **kwargs)
-
-    def connect(self, target) -> None:
-        _safe_connect(self, target)
-
-    def disconnect(self, target) -> None:
-        _safe_disconnect(self, target)

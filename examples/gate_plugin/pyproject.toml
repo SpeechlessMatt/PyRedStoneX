@@ -1,18 +1,26 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = [
+    "scikit-build-core>=0.10",
+    "redstonex",
+    "setuptools-scm"
+]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "redstonex_gate_plugin_example"
 version = "0.1.0"
 description = "A PyRedStoneX plugin example"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
+authors = [
+    { name = "Czy_4201b" }
+]
+license = "GPL-3.0-or-later"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: C",
 ]
 
-[tool.setuptools]
-package_dir = {"" = "src"}
-packages = ["gate_plugin"]
+[tool.scikit-build]
+wheel.packages = ["src/gate_plugin"]
+cmake.define.PyRedStoneX_DIR = "PATH_TO_YOUR_REDSTONEX_CMAKE_DIR"
