@@ -7,7 +7,7 @@ requires = [
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "redstonex_gate_plugin_example"
+name = "redstonex_gate_plugin"
 version = "0.1.0"
 description = "A PyRedStoneX plugin example"
 readme = "README.md"
@@ -23,4 +23,3 @@ classifiers = [
 
 [tool.scikit-build]
 wheel.packages = ["src/gate_plugin"]
-cmake.define.PyRedStoneX_DIR = "PATH_TO_YOUR_REDSTONEX_CMAKE_DIR"
