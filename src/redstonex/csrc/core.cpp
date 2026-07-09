@@ -430,7 +430,7 @@ PYBIND11_MODULE(_core, m) {
             bool success = self.connect(target);
 
             if (!success) {
-                if (self.get_raw()->connect_count >= self.get_raw()->limit) {
+                if (self.get_raw()->connect_count >= self.get_raw()->limit || target.get_raw()->connect_count >= target.get_raw()->limit) {
                     std::string msg = "[Connection failed] Connection Limit Error: connection is limited to " 
                                       + std::to_string(self.get_raw()->limit);
                     py::set_error(limit_err, msg.c_str());

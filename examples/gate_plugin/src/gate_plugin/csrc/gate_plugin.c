@@ -505,6 +505,9 @@ void ANDGate_update(RSXSimulateEvent* event, RSXSimulator* sim) {
     uint32_t valid_input_count = 0;
 
     for (uint32_t i = 0; i < self->base.power_map_count; i++) {
+        if (self->base.power_map[i].source == (RSXConnectiveObject*)&self->output_slot) {
+            continue; 
+        }
         // 无视高阻态
         if (self->base.power_map[i].type == RSX_POWER_NONE) continue;
         valid_input_count++;
@@ -547,6 +550,9 @@ void ORGate_update(RSXSimulateEvent* event, RSXSimulator* sim) {
     uint32_t valid_input_count = 0;
 
     for (uint32_t i = 0; i < self->base.power_map_count; i++) {
+        if (self->base.power_map[i].source == (RSXConnectiveObject*)&self->output_slot) {
+            continue; 
+        }
         // 无视高阻态
         if (self->base.power_map[i].type == RSX_POWER_NONE) continue;
         valid_input_count++;
@@ -589,6 +595,9 @@ void NANDGate_update(RSXSimulateEvent* event, RSXSimulator* sim) {
     uint32_t valid_input_count = 0;
 
     for (uint32_t i = 0; i < self->base.power_map_count; i++) {
+        if (self->base.power_map[i].source == (RSXConnectiveObject*)&self->output_slot) {
+            continue; 
+        }
         // 无视高阻态
         if (self->base.power_map[i].type == RSX_POWER_NONE) continue;
         valid_input_count++;
@@ -640,6 +649,9 @@ void NORGate_update(RSXSimulateEvent* event, RSXSimulator* sim) {
     uint32_t valid_input_count = 0;
 
     for (uint32_t i = 0; i < self->base.power_map_count; i++) {
+        if (self->base.power_map[i].source == (RSXConnectiveObject*)&self->output_slot) {
+            continue; 
+        }
         // 无视高阻态
         if (self->base.power_map[i].type == RSX_POWER_NONE) continue;
         valid_input_count++;
@@ -692,6 +704,9 @@ void XORGate_update(RSXSimulateEvent* event, RSXSimulator* sim) {
 
     bool xor_state = false;
     for (uint32_t i = 0; i < self->base.power_map_count; i++) {
+        if (self->base.power_map[i].source == (RSXConnectiveObject*)&self->output_slot) {
+            continue; 
+        }
         // 无视高阻态
         if (self->base.power_map[i].type == RSX_POWER_NONE) continue;
         valid_input_count++;
@@ -737,6 +752,9 @@ void XNORGate_update(RSXSimulateEvent* event, RSXSimulator* sim) {
 
     bool xor_state = false;
     for (uint32_t i = 0; i < self->base.power_map_count; i++) {
+        if (self->base.power_map[i].source == (RSXConnectiveObject*)&self->output_slot) {
+            continue; 
+        }
         // 无视高阻态
         if (self->base.power_map[i].type == RSX_POWER_NONE) continue;
         valid_input_count++;
