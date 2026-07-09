@@ -437,7 +437,7 @@ PYBIND11_MODULE(_core, m) {
                     throw py::error_already_set();
                 }
 
-                std::string msg = "[Connection refused by RedStoneX] Connective Error: Type not Matched!";
+                std::string msg = "[Connection refused by RedStoneX] Connective Error: Type not Matched or Duplicate Connection!";
                 py::set_error(conn_err, msg.c_str());
                 throw py::error_already_set();
             }
